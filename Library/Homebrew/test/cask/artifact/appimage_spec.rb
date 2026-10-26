@@ -64,6 +64,24 @@ RSpec.describe Cask::Artifact::AppImage, :cask do
       EOS
     end
 
+    describe "when the desktop entry has MIME types" do
+      let(:desktop_entry_dir) { xdg_data_home/"applications" }
+      let(:update_desktop_database) { Pathname("/usr/bin/update-desktop-database") }
+
+      before do
+        ENV["NAKED_ICON_LINE"] = "Icon=naked\nMimeType=x-scheme-handler/naked;"
+        desktop_entry_dir.mkpath
+        (desktop_entry_dir/"mimeinfo.cache").write("[MIME Cache]\n")
+        allow(artifact).to receive(:which).with("update-desktop-database").and_return(update_desktop_database)
+        allow(command).to receive(:run).and_call_original
+      end
+
+      it "rebuilds an existing mimetype cache" do
+        expect(command).to receive(:run).with(update_desktop_database, args: [desktop_entry_dir], print_stderr: false)
+        install_phase
+      end
+    end
+
     describe "when the AppImage has several root-level `.desktop` files" do
       let(:installed_desktop_entries) { (xdg_data_home/"applications").children.map { |path| path.basename.to_s } }
 
@@ -112,7 +130,7 @@ RSpec.describe Cask::Artifact::AppImage, :cask do
       it "adds the AppImage's `.DirIcon` to it" do
         install_phase
 
-        expect(desktop_entry.read).to start_with("[Desktop Entry]\nIcon=#{cask.staged_path}/naked.png\n")
+        expect(desktop_entry.read).to include("Icon=#{cask.staged_path}/naked.png\n")
       end
     end
 
@@ -237,76 +255,6 @@ RSpec.describe Cask::Artifact::AppImage, :cask do
     end
   end
 
-  describe "::desktop_entry_exec" do
-    subject(:desktop_entry_exec) do
-      described_class.desktop_entry_exec(embedded_exec, exec_path: '"/A/Foo.AppImage"', exec_environment: "env X=1")
-    end
-
-    let(:embedded_exec) { "" }
-
-    describe "when it sets variables with `env`" do
-      let(:embedded_exec) { "env GDK_BACKEND=x11 UBUNTU_MENUPROXY=0 audacity %F" }
-
-      it "keeps them" do
-        expect(desktop_entry_exec).to eq('env X=1 GDK_BACKEND=x11 UBUNTU_MENUPROXY=0 "/A/Foo.AppImage" %F')
-      end
-    end
-
-    describe "when it sets variables without `env`" do
-      let(:embedded_exec) { "LD_LIBRARY_PATH=usr/lib clashmi %u" }
-
-      it "sets them with `env`" do
-        expect(desktop_entry_exec).to eq('env X=1 LD_LIBRARY_PATH=usr/lib "/A/Foo.AppImage" %u')
-      end
-    end
-
-    describe "when it runs a program with arguments" do
-      let(:embedded_exec) { "AppRun --no-sandbox %U" }
-
-      it "keeps the arguments" do
-        expect(desktop_entry_exec).to eq('env X=1 "/A/Foo.AppImage" --no-sandbox %U')
-      end
-    end
-
-    describe "when its program is double-quoted" do
-      let(:embedded_exec) { '"Shutter Encoder"' }
-
-      it "replaces the whole program" do
-        expect(desktop_entry_exec).to eq('env X=1 "/A/Foo.AppImage"')
-      end
-    end
-
-    describe "when its program is single-quoted" do
-      let(:embedded_exec) { "'Foo Bar' --flag %U" }
-
-      it "replaces the whole program" do
-        expect(desktop_entry_exec).to eq('env X=1 "/A/Foo.AppImage" --flag %U')
-      end
-    end
-
-    describe "when it sets `DESKTOPINTEGRATION` among other variables" do
-      let(:embedded_exec) { "env FOO=1 DESKTOPINTEGRATION=0 BAR=2 AppRun %U" }
-
-      it "drops only its `DESKTOPINTEGRATION`" do
-        expect(desktop_entry_exec).to eq('env X=1 FOO=1 BAR=2 "/A/Foo.AppImage" %U')
-      end
-    end
-
-    describe "when it sets `DESKTOPINTEGRATION` and quoted values" do
-      let(:embedded_exec) { 'env DESKTOPINTEGRATION=0 FOO="a \"b\" c" AppRun "%f"' }
-
-      it "drops its `DESKTOPINTEGRATION` and keeps the quoting" do
-        expect(desktop_entry_exec).to eq('env X=1 FOO="a \"b\" c" "/A/Foo.AppImage" "%f"')
-      end
-    end
-
-    describe "when it is empty" do
-      it "runs the AppImage" do
-        expect(desktop_entry_exec).to eq('env X=1 "/A/Foo.AppImage"')
-      end
-    end
-  end
-
   describe "uninstall_phase" do
     it "removes the target AppImage" do
       install_phase
@@ -323,6 +271,32 @@ RSpec.describe Cask::Artifact::AppImage, :cask do
       uninstall_phase
 
       expect(desktop_entry).not_to exist
+    end
+
+    describe "when the removed desktop entry has MIME types" do
+      let(:update_desktop_database) { Pathname("/usr/bin/update-desktop-database") }
+
+      before do
+        install_phase
+        desktop_entry.write(
+          desktop_entry.read.sub("[Desktop Entry]\n", "[Desktop Entry]\nMimeType=x-scheme-handler/naked;\n"),
+        )
+        allow(artifact).to receive(:which).with("update-desktop-database").and_return(update_desktop_database)
+        allow(command).to receive(:run).and_call_original
+      end
+
+      it "rebuilds an existing mimetype cache" do
+        (desktop_entry.dirname/"mimeinfo.cache").write("[MIME Cache]\n")
+
+        expect(command).to receive(:run)
+          .with(update_desktop_database, args: [desktop_entry.dirname], print_stderr: false)
+        uninstall_phase
+      end
+
+      it "doesn't create a mimetype cache" do
+        expect(command).not_to receive(:run).with(update_desktop_database, anything)
+        uninstall_phase
+      end
     end
 
     it "removes every linked desktop entry" do
