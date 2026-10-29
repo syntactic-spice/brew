@@ -56,6 +56,7 @@ RSpec.describe "brew shellenv", type: :system do
     "bash" => %w[--noprofile --norc -c],
     "csh"  => %w[-f -c],
     "fish" => %w[--no-config -c],
+    "nu"   => %w[--no-config-file -c],
     "pwsh" => %w[-NoProfile -Command],
     "sh"   => %w[-c],
     "tcsh" => %w[-f -c],

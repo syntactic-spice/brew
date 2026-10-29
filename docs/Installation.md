@@ -182,6 +182,19 @@ You need to update your shell's config file (which file exactly depends on your 
 eval "$(<Homebrew prefix path>/bin/brew shellenv)"
 ```
 
+For Nushell, add this to your `env.nu` instead:
+
+```nu
+mkdir $nu.cache-dir
+^'<Homebrew prefix path>/bin/brew' shellenv nu | save --force ($nu.cache-dir | path join "brew.nu")
+```
+
+and this to your `config.nu`:
+
+```nu
+source ($nu.cache-dir | path join "brew.nu")
+```
+
 Replace `<Homebrew prefix path>` with the directory where Homebrew is installed on your system.
 You can find Homebrew's default install location in [this FAQ entry](FAQ.md#why-should-i-install-homebrew-in-the-default-location).
 

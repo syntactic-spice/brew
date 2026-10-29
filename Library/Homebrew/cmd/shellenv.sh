@@ -54,6 +54,17 @@ homebrew-shellenv() {
       echo "if (\${ENV:MANPATH}) { [System.Environment]::SetEnvironmentVariable('MANPATH',(':'+\${ENV:MANPATH}.Trim(':')),[System.EnvironmentVariableTarget]::Process) }"
       echo "[System.Environment]::SetEnvironmentVariable('INFOPATH',('${HOMEBREW_PREFIX}/share/info:'+\${ENV:INFOPATH}),[System.EnvironmentVariableTarget]::Process)"
       ;;
+    nu | -nu | nushell)
+      echo "load-env {"
+      echo "  HOMEBREW_PREFIX: '${HOMEBREW_PREFIX}'"
+      echo "  HOMEBREW_CELLAR: '${HOMEBREW_CELLAR}'"
+      echo "  HOMEBREW_REPOSITORY: '${HOMEBREW_REPOSITORY}'"
+      echo "}"
+      echo "use std/util 'path add'"
+      echo "path add '${HOMEBREW_PREFIX}/bin' '${HOMEBREW_PREFIX}/sbin'"
+      echo "if (\$env.MANPATH? | is-not-empty) { \$env.MANPATH = ':' + (\$env.MANPATH | str trim --char ':') }"
+      echo "\$env.INFOPATH = '${HOMEBREW_PREFIX}/share/info:' + (\$env.INFOPATH? | default '')"
+      ;;
     *)
       echo "export HOMEBREW_PREFIX=\"${HOMEBREW_PREFIX}\";"
       echo "export HOMEBREW_CELLAR=\"${HOMEBREW_CELLAR}\";"
